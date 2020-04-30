@@ -2044,95 +2044,100 @@ lunr.Index.prototype.query = function (fn) {
          * building the query vector.
          */
         var expandedTerm = expandedTerms[j],
-            posting = this.invertedIndex[expandedTerm],
-            termIndex = posting._index
-
-        for (var k = 0; k < clause.fields.length; k++) {
-          /*
-           * For each field that this query term is scoped by (by default
-           * all fields are in scope) we need to get all the document refs
-           * that have this term in that field.
-           *
-           * The posting is the entry in the invertedIndex for the matching
-           * term from above.
-           */
-          var field = clause.fields[k],
-              fieldPosting = posting[field],
-              matchingDocumentRefs = Object.keys(fieldPosting),
-              termField = expandedTerm + "/" + field,
-              matchingDocumentsSet = new lunr.Set(matchingDocumentRefs)
-
-          /*
-           * if the presence of this term is required ensure that the matching
-           * documents are added to the set of required matches for this clause.
-           *
-           */
-          if (clause.presence == lunr.Query.presence.REQUIRED) {
-            clauseMatches = clauseMatches.union(matchingDocumentsSet)
-
-            if (requiredMatches[field] === undefined) {
-              requiredMatches[field] = lunr.Set.complete
-            }
-          }
-
-          /*
-           * if the presence of this term is prohibited ensure that the matching
-           * documents are added to the set of prohibited matches for this field,
-           * creating that set if it does not yet exist.
-           */
-          if (clause.presence == lunr.Query.presence.PROHIBITED) {
-            if (prohibitedMatches[field] === undefined) {
-              prohibitedMatches[field] = lunr.Set.empty
-            }
-
-            prohibitedMatches[field] = prohibitedMatches[field].union(matchingDocumentsSet)
+            posting = this.invertedIndex[expandedTerm]
+        if(posting === undefined){
+          continue;
+        } else {
+          var termIndex = posting._index
+          for (var k = 0; k < clause.fields.length; k++) {
+            /*
+             * For each field that this query term is scoped by (by default
+             * all fields are in scope) we need to get all the document refs
+             * that have this term in that field.
+             *
+             * The posting is the entry in the invertedIndex for the matching
+             * term from above.
+             */
+            var field = clause.fields[k],
+                fieldPosting = posting[field],
+                matchingDocumentRefs = Object.keys(fieldPosting),
+                termField = expandedTerm + "/" + field,
+                matchingDocumentsSet = new lunr.Set(matchingDocumentRefs)
 
             /*
-             * Prohibited matches should not be part of the query vector used for
-             * similarity scoring and no metadata should be extracted so we continue
-             * to the next field
+             * if the presence of this term is required ensure that the matching
+             * documents are added to the set of required matches for this clause.
+             *
              */
-            continue
-          }
+            if (clause.presence == lunr.Query.presence.REQUIRED) {
+              clauseMatches = clauseMatches.union(matchingDocumentsSet)
 
-          /*
-           * The query field vector is populated using the termIndex found for
-           * the term and a unit value with the appropriate boost applied.
-           * Using upsert because there could already be an entry in the vector
-           * for the term we are working with. In that case we just add the scores
-           * together.
-           */
-          queryVectors[field].upsert(termIndex, clause.boost, function (a, b) { return a + b })
-
-          /**
-           * If we've already seen this term, field combo then we've already collected
-           * the matching documents and metadata, no need to go through all that again
-           */
-          if (termFieldCache[termField]) {
-            continue
-          }
-
-          for (var l = 0; l < matchingDocumentRefs.length; l++) {
-            /*
-             * All metadata for this term/field/document triple
-             * are then extracted and collected into an instance
-             * of lunr.MatchData ready to be returned in the query
-             * results
-             */
-            var matchingDocumentRef = matchingDocumentRefs[l],
-                matchingFieldRef = new lunr.FieldRef (matchingDocumentRef, field),
-                metadata = fieldPosting[matchingDocumentRef],
-                fieldMatch
-
-            if ((fieldMatch = matchingFields[matchingFieldRef]) === undefined) {
-              matchingFields[matchingFieldRef] = new lunr.MatchData (expandedTerm, field, metadata)
-            } else {
-              fieldMatch.add(expandedTerm, field, metadata)
+              if (requiredMatches[field] === undefined) {
+                requiredMatches[field] = lunr.Set.complete
+              }
             }
 
-          }
+            /*
+             * if the presence of this term is prohibited ensure that the matching
+             * documents are added to the set of prohibited matches for this field,
+             * creating that set if it does not yet exist.
+             */
+            if (clause.presence == lunr.Query.presence.PROHIBITED) {
+              if (prohibitedMatches[field] === undefined) {
+                prohibitedMatches[field] = lunr.Set.empty
+              }
 
-          termFieldCache[termField] = true
+              prohibitedMatches[field] = prohibitedMatches[field].union(matchingDocumentsSet)
+
+              /*
+               * Prohibited matches should not be part of the query vector used for
+               * similarity scoring and no metadata should be extracted so we continue
+               * to the next field
+               */
+              continue
+            }
+
+            /*
+             * The query field vector is populated using the termIndex found for
+             * the term and a unit value with the appropriate boost applied.
+             * Using upsert because there could already be an entry in the vector
+             * for the term we are working with. In that case we just add the scores
+             * together.
+             */
+            queryVectors[field].upsert(termIndex, clause.boost, function (a, b) {
+              return a + b
+            })
+
+            /**
+             * If we've already seen this term, field combo then we've already collected
+             * the matching documents and metadata, no need to go through all that again
+             */
+            if (termFieldCache[termField]) {
+              continue
+            }
+
+            for (var l = 0; l < matchingDocumentRefs.length; l++) {
+              /*
+               * All metadata for this term/field/document triple
+               * are then extracted and collected into an instance
+               * of lunr.MatchData ready to be returned in the query
+               * results
+               */
+              var matchingDocumentRef = matchingDocumentRefs[l],
+                  matchingFieldRef = new lunr.FieldRef(matchingDocumentRef, field),
+                  metadata = fieldPosting[matchingDocumentRef],
+                  fieldMatch
+
+              if ((fieldMatch = matchingFields[matchingFieldRef]) === undefined) {
+                matchingFields[matchingFieldRef] = new lunr.MatchData(expandedTerm, field, metadata)
+              } else {
+                fieldMatch.add(expandedTerm, field, metadata)
+              }
+
+            }
+
+            termFieldCache[termField] = true
+          }
         }
       }
     }
